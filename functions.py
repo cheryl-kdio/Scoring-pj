@@ -1,3 +1,17 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import scipy.stats as stats
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+import math
+from scipy.stats import chi2_contingency
+from scipy.stats import skew, kurtosis
+from collections import Counter
+
 def find_categorical_variables(data, threshold):
     """
     Identifie les variables avec un nombre de valeurs uniques inférieur à un seuil.
@@ -48,26 +62,20 @@ def find_uniq_mod_variables(data, qualitative_vars, threshold=0.9):
 
     return result_df
 
-
-import matplotlib.pyplot as plt
-import math
-
 def plot_cat_vars_distributions(data, vars_list, cols=2):
     """
     Génère des graphiques montrant la distribution des modalités pour chaque variable dans une grille.
     """
     num_vars = len(vars_list)
-    rows = math.ceil(num_vars / cols)  # Calcul du nombre de lignes nécessaires
+    rows = math.ceil(num_vars / cols) 
     
     fig, axes = plt.subplots(rows, cols, figsize=(15, rows * 5))
     axes = axes.flatten()  # Aplatir les axes pour itération facile
     
     for i, var in enumerate(vars_list):
-        value_counts = data[var].value_counts(normalize=True)  # Normalisation des fréquences
-        
-        # Gestion de l'index pour éviter les erreurs MultiIndex
-        index_values = value_counts.index.to_flat_index()  # Aplatir si MultiIndex
-        index_values = [str(x) for x in index_values]      # Convertir en chaîne chaque valeur
+        value_counts = data[var].value_counts(normalize=True) 
+        index_values = value_counts.index.to_flat_index()  
+        index_values = [str(x) for x in index_values]   
         
         # Création du graphique
         axes[i].bar(index_values, value_counts.values, color='skyblue')
@@ -75,7 +83,6 @@ def plot_cat_vars_distributions(data, vars_list, cols=2):
         axes[i].set_title(f'{var}')
         axes[i].tick_params(axis='x', rotation=45)
     
-    # Supprimer les sous-graphiques inutilisés si le nombre de variables est inférieur à la grille
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
     
@@ -84,15 +91,6 @@ def plot_cat_vars_distributions(data, vars_list, cols=2):
     plt.tight_layout()
     plt.show()
 
-
-
-import matplotlib.pyplot as plt
-import pandas as pd
-import math
-
-import matplotlib.pyplot as plt
-import pandas as pd
-import math
 
 def tx_rsq_par_var(df, categ_vars, date, target, cols=2):
     """
@@ -110,7 +108,7 @@ def tx_rsq_par_var(df, categ_vars, date, target, cols=2):
     df = df.dropna(subset=[date] + categ_vars)
 
     num_vars = len(categ_vars)
-    rows = math.ceil(num_vars / cols)  # Calcul du nombre de lignes nécessaires
+    rows = math.ceil(num_vars / cols) 
 
     fig, axes = plt.subplots(rows, cols, figsize=(15, rows * 5), sharex=True, sharey=True)
     axes = axes.flatten()  # Aplatir les axes pour itération facile
@@ -138,18 +136,60 @@ def tx_rsq_par_var(df, categ_vars, date, target, cols=2):
     plt.show()
 
 
+def combined_barplot_lineplot(df, cat_vars, cible, cols=2):
+    """
+    Génère une grille de barplots combinés avec des lineplots pour une liste de variables catégorielles.
+    """
+    num_vars = len(cat_vars)
+    rows = math.ceil(num_vars / cols) 
 
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 5, rows * 5))
+    axes = axes.flatten()  # Aplatir les axes pour itération facile
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-import math
+    for i, cat_col in enumerate(cat_vars):
+        ax1 = axes[i]  # Axe pour le barplot
+
+        # Vérifier si la variable est catégorielle et la convertir en chaîne si nécessaire
+        if pd.api.types.is_categorical_dtype(df[cat_col]):
+            df[cat_col] = df[cat_col].astype(str)
+
+        # Calcul du taux de risque
+        tx_rsq = (df.groupby([cat_col])[cible].mean() * 100).reset_index()
+
+        # Calcul des effectifs
+        effectifs = df[cat_col].value_counts().reset_index()
+        effectifs.columns = [cat_col, "count"]
+
+        # Fusion des données
+        merged_data = effectifs.merge(tx_rsq, on=cat_col).sort_values(by=cible, ascending=True)
+
+        # Création des graphiques
+        ax2 = ax1.twinx()  # Deuxième axe pour le lineplot
+        sns.barplot(data=merged_data, x=cat_col, y="count", color='grey', ax=ax1)
+        sns.lineplot(data=merged_data, x=cat_col, y=cible, color='red', marker="o", ax=ax2)
+
+        # Configuration des axes
+        ax1.set_title(f"{cat_col}")
+        ax1.set_xlabel("")
+        ax1.set_ylabel("Effectifs")
+        ax2.set_ylabel("Taux de risque (%)")
+        ax1.tick_params(axis='x', rotation=45)
+
+    # Supprimer les axes inutilisés si le nombre de variables est inférieur à la grille
+    for j in range(i + 1, len(axes)):
+        fig.delaxes(axes[j])
+
+    # Titre général
+    fig.suptitle("Barplots et Lineplots combinés pour les variables catégorielles", fontsize=16, y=1.02)
+    plt.tight_layout()
+    plt.show()
 
 def compare_distributions_grid(X_train, X_test, var_list, cols=2):
     """
     Compare les distributions des variables continues dans Train et Test et les affiche sous forme de grille.
     """
     num_vars = len(var_list)
-    rows = math.ceil(num_vars / cols)  # Calcul du nombre de lignes nécessaires
+    rows = math.ceil(num_vars / cols) 
     
     fig, axes = plt.subplots(rows, cols, figsize=(15, rows * 5))
     axes = axes.flatten()  # Aplatir les axes pour itération facile
@@ -161,7 +201,6 @@ def compare_distributions_grid(X_train, X_test, var_list, cols=2):
         axes[i].set_title(f"{var}")
         axes[i].legend()
 
-    # Supprimer les sous-graphiques inutilisés si le nombre de variables est inférieur à la grille
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
     
@@ -170,11 +209,6 @@ def compare_distributions_grid(X_train, X_test, var_list, cols=2):
     plt.tight_layout()
     plt.show()
 
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-import scipy.stats as stats
-import pandas as pd
 
 def compare_distributions_summary(X_train, X_test, var_list):
     """
@@ -208,12 +242,6 @@ def compare_distributions_summary(X_train, X_test, var_list):
     return result_df
 
 
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import math
-
 def plot_modalities_over_time(X_train, date_col, categorical_vars, exclude_vars=None, cols=2):
     """
     Affiche l'évolution du nombre de modalités uniques par variable catégorielle au fil du temps.
@@ -239,7 +267,6 @@ def plot_modalities_over_time(X_train, date_col, categorical_vars, exclude_vars=
                 'modalities_count': modalities_count
             })
 
-    # Convertir la liste en DataFrame
     modalities_df = pd.DataFrame(modalities_over_time)
 
     # Déterminer le nombre de graphiques
@@ -268,22 +295,12 @@ def plot_modalities_over_time(X_train, date_col, categorical_vars, exclude_vars=
     plt.show()
 
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-import math
-
 def plot_boxplots(data, vars_list, cols=2):
     """
     Affiche des boxplots pour chaque variable continue dans une grille.
-
-    Args:
-    - data : DataFrame contenant les données.
-    - vars_list : Liste des variables continues à visualiser.
-    - cols : Nombre de colonnes dans la grille (par défaut : 2).
-    - general_title : Titre général pour la figure (par défaut : None).
     """
     num_vars = len(vars_list)
-    rows = math.ceil(num_vars / cols)  # Calcul du nombre de lignes nécessaires
+    rows = math.ceil(num_vars / cols) 
     
     fig, axes = plt.subplots(rows, cols, figsize=(15, rows * 5))
     axes = axes.flatten()  # Aplatir les axes pour itération facile
@@ -294,54 +311,40 @@ def plot_boxplots(data, vars_list, cols=2):
         axes[i].set_xlabel("")  # Pas besoin d'étiquette pour x
         axes[i].set_ylabel("Valeurs")
 
-    # Supprimer les sous-graphiques inutilisés si le nombre de variables est inférieur à la grille
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
-    # Ajouter un titre général
     fig.suptitle("Distribution des variables continues", fontsize=16, y=1.02)  # Positionner le titre légèrement au-dessus
 
     plt.tight_layout()
     plt.show()
 
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import math
-
 def plot_boxplots_by_target(data, vars_list, target, cols=2):
     """
     Génère des boxplots pour chaque variable continue en fonction des valeurs cibles fournies.
     """
 
-    # Ajouter les valeurs cibles comme colonne temporaire au DataFrame
     data = data.copy()
-    # Début de la génération des graphiques
     num_vars = len(vars_list)
-    rows = math.ceil(num_vars / cols)  # Calcul du nombre de lignes nécessaires
+    rows = math.ceil(num_vars / cols) 
 
     fig, axes = plt.subplots(rows, cols, figsize=(15, rows * 5))
     axes = axes.flatten()  # Aplatir les axes pour itération facile
 
     for i, var in enumerate(vars_list):
-        # Création du boxplot
         sns.boxplot(data=data, x=target, y=var, ax=axes[i], palette='Set3')
         axes[i].set_title(f"{var}")
         axes[i].set_xlabel("Valeur cible")
         axes[i].set_ylabel(var)
         
-
-    # Supprimer les sous-graphiques inutilisés si le nombre de variables est inférieur à la grille
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
-    # Ajouter un titre général
     fig.suptitle("Boxplots des variables continues par valeur cible", fontsize=16, y=1.02)
     plt.tight_layout()
     plt.show()
 
-from scipy.stats import chi2_contingency
 
 def cramer_V(cat_var1,cat_var2):
     """
@@ -352,20 +355,6 @@ def cramer_V(cat_var1,cat_var2):
     obs=np.sum(crosstab) 
     mini = min(crosstab.shape)-1 #min entre les colonnes et ligne du tableau croisé ==> ddl
     return (np.sqrt(stat/(obs*mini)))
-
-def table_cramerV(df):
-    """
-    Calcule le coefficient de Cramer's V pour chaque paire de variables catégorielles.
-    """
-    rows=[]
-    for var1 in df :
-        col=[]
-        for var2 in df :
-            cramers = cramer_V(df[var1],df[var2])
-            col.append(round(cramers,2))
-        rows.append(col)
-    cramers_results = np.array(rows)
-    result=pd.DataFrame(cramers_results,columns=df.columns,index=df.columns)
 
 def compute_cramers_v(df, categorical_vars, target):
     """
@@ -405,12 +394,7 @@ def stats_liaisons_var_quali(df,categorical_columns):
     return (p_value_df, cramer_v_df)
 
 
-
-
-
-
 #### CHECK IF USED
-import pandas as pd
 
 def filter_by_cv(df, variables, threshold=0.1):
     """
@@ -444,10 +428,6 @@ def filter_by_cv(df, variables, threshold=0.1):
     
     return high_cv_vars, cv_values,
 
-
-import pandas as pd
-import numpy as np
-from scipy.stats import skew, kurtosis
 
 def gini_index(data):
     """
@@ -525,3 +505,111 @@ def summarize_distribution_table(df):
     }
     
     return summary
+
+
+############# Discrétisation avec la méthode ChiMerge
+
+class Discretization:
+    ''' A process that transforms quantitative data into qualitative data '''
+    
+    def __init__(cls):
+        print('Data discretization process started')
+        
+    def get_new_intervals(cls, intervals, chi, min_chi):
+        ''' To merge the interval based on minimum chi square value '''
+        
+        min_chi_index = np.where(chi == min_chi)[0][0]
+        new_intervals = []
+        skip = False
+        done = False
+        for i in range(len(intervals)):
+            if skip:
+                skip = False
+                continue
+            if i == min_chi_index and not done:
+                t = intervals[i] + intervals[i+1]
+                new_intervals.append([min(t), max(t)])
+                skip = True
+                done = True
+            else:
+                new_intervals.append(intervals[i])
+        return new_intervals        
+        
+    def get_chimerge_intervals(cls, data, colName, label, max_intervals):
+        '''
+            1. Compute the χ 2 value for each pair of adjacent intervals
+            2. Merge the pair of adjacent intervals with the lowest χ 2 value
+            3. Repeat œ and  until χ 2 values of all adjacent pairs exceeds a threshold
+        '''
+        
+        # Getting unique values of input column
+        distinct_vals = np.unique(data[colName])
+        
+        # Getting unique values of output column
+        labels = np.unique(data[label])
+        
+        # Initially set the value to zero for all unique output column values
+        empty_count = {l: 0 for l in labels}
+        intervals = [[distinct_vals[i], distinct_vals[i]] for i in range(len(distinct_vals))]
+        while len(intervals) > max_intervals:
+            chi = []
+            for i in range(len(intervals)-1):
+                
+                # Find chi square for Interval 1
+                row1 = data[data[colName].between(intervals[i][0], intervals[i][1])]
+                # Find chi square for Interval 2
+                row2 = data[data[colName].between(intervals[i+1][0], intervals[i+1][1])]
+                total = len(row1) + len(row2)
+                
+                # Generate Contigency
+                count_0 = np.array([v for i, v in {**empty_count, **Counter(row1[label])}.items()])
+                count_1 = np.array([v for i, v in {**empty_count, **Counter(row2[label])}.items()])
+                count_total = count_0 + count_1
+                
+                # Find the expected value by the following formula
+                # Expected Value → ( Row Sum * Column Sum ) / Total Sum
+                expected_0 = count_total*sum(count_0)/total
+                expected_1 = count_total*sum(count_1)/total
+                chi_ = (count_0 - expected_0)**2/expected_0 + (count_1 - expected_1)**2/expected_1
+                
+                # Store the chi value to find minimum chi value
+                chi_ = np.nan_to_num(chi_)
+                chi.append(sum(chi_))
+            min_chi = min(chi)
+            
+            intervals = cls.get_new_intervals(intervals, chi, min_chi)
+        print(' Min chi square value is ' + str(min_chi))
+        return intervals
+
+
+def discretize_with_intervals(data, intervals_by_variable, date, cible):
+    """
+    Discrétise plusieurs colonnes d'un DataFrame en fonction des intervalles spécifiés dans le dictionnaire
+    et retourne la liste des nouvelles variables créées.
+    """
+    df = data[[date, cible]].copy()
+    new_variables = []  
+    
+    for entry in intervals_by_variable:
+        variable = entry['variable']
+        intervals = entry['intervals']
+        labels = [
+            f"[{intervals[i][0]}-{intervals[i][1]}]" if i == 0 else f"({intervals[i][0]}-{intervals[i][1]}]"
+            for i in range(len(intervals))
+        ] # Créer les labels pour chaque intervalle avec la borne inférieure exclue (sauf pour le premier intervalle) et la borne supérieure incluse
+        
+        # Nom de la nouvelle colonne
+        new_col_name = f"{variable}_Dis"
+        
+        # Discrétisation
+        df[new_col_name] = pd.cut(
+            data[variable],
+            bins=[intervals[0][0]] + [i[1] for i in intervals],  # Convertir intervalles en bornes
+            labels=labels,
+            include_lowest=True,
+            right=True
+        )
+        
+        new_variables.append(new_col_name)
+    
+    return df, new_variables
