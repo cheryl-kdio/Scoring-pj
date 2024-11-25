@@ -393,6 +393,49 @@ def stats_liaisons_var_quali(df,categorical_columns):
                 
     return (p_value_df, cramer_v_df)
 
+def test_freq_by_group(data, qualitative_vars, threshold=0.05):
+
+    unique_mod_result = []
+
+    for var in qualitative_vars:
+        value_counts = data[var].value_counts(normalize=True)  # Normalisation des fréquences
+        if value_counts.iloc[0] <=threshold:
+            unique_mod_result.append(var)
+    if len(unique_mod_result)==0:
+        print("Aucune variable n'a de modalités avec moins de 5% d'effectifs.")
+    return unique_mod_result
+
+def group_by_rsq(df, cat_var,cible):
+    """
+    Groupe les modalités d'une variable catégorielle qui ont une fréquence inférieure à 5% 
+    en fonction de leur taux de risque moyen.
+    """
+    grouped_classes = []
+    cumulative_weight = 0
+    group = []
+    risk_rates = df.groupby(cat_var)[cible].mean()
+    for i, (interval, risk) in enumerate(risk_rates.items()):
+        freq = df[df[cat_var] == interval].shape[0] / df.shape[0]
+        group.append(interval)
+        cumulative_weight += freq
+        
+        # Regrouper les classes pour que chaque groupe contienne au moins 5% de la population
+        if cumulative_weight >= 0.05:
+            grouped_classes.append(group)
+            group = []
+            cumulative_weight = 0
+
+    # Gestion du dernier groupe (si existant)
+    if group:
+        last_group_weight = sum(df[df[cat_var] == g].shape[0] / df.shape[0] for g in group)
+        if last_group_weight < 0.05 and grouped_classes:
+            # Ajouter le dernier groupe au groupe précédent pour respecter la contrainte
+            grouped_classes[-1].extend(group)
+        else:
+            # Ajouter le dernier groupe si la contrainte est respectée
+            grouped_classes.append(group)
+    return grouped_classes
+
 
 #### CHECK IF USED
 
