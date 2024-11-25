@@ -683,17 +683,18 @@ def discretize_with_intervals(data, intervals_by_variable, date, cible):
 import pandas as pd
 from scipy.stats import f_oneway
 
-def perform_anova(df, continuous_vars, target_var):
+def perform_anova(data, continuous_vars, target_var):
+    df = data.copy()
     results = []  # Liste pour stocker les résultats
-    
     for var in continuous_vars:
         # Regrouper les données par la variable cible
         groups = [group[var].dropna() for name, group in df.groupby(target_var)]
         
         # Effectuer le test ANOVA
         F_stat, p_value = f_oneway(*groups)
-        if p_value < 0.05:
-            results.append({"Variable": var, "F-Statistic": F_stat, "p-value": p_value})
+        results.append({"Variable": var, "F-Statistic": F_stat, "p-value": p_value})
+        # if p_value < 0.05:
+        #     results.append({"Variable": var, "F-Statistic": F_stat, "p-value": p_value})
     
     # Convertir les résultats en DataFrame
     results_df = pd.DataFrame(results)
@@ -732,9 +733,9 @@ def perform_kruskal_wallis(data, cont_vars, target):
     # Convertir les résultats en DataFrame pour faciliter la visualisation
     kruskal_gen_results_df = pd.DataFrame(kruskal_gen_results).T
     kruskal_sign_results_df = pd.DataFrame(kruskal_sign_results).T
-    print("le nombre de colonnes retenues est : ", kruskal_results_df.shape[0])
+    print("le nombre de colonnes retenues est : ", kruskal_sign_results_df.shape[0])
     print()
-    print("les variables supprimées sont : ", [var for var in cont_vars if var not in kruskal_results_df.index])
+    print("les variables supprimées sont : ", [var for var in cont_vars if var not in kruskal_sign_results.index])
     
     
     return kruskal_gen_results_df, kruskal_sign_results_df
