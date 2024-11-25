@@ -656,3 +656,58 @@ def discretize_with_intervals(data, intervals_by_variable, date, cible):
         new_variables.append(new_col_name)
     
     return df, new_variables
+
+
+
+import pandas as pd
+from scipy.stats import f_oneway
+
+def perform_anova(df, continuous_vars, target_var):
+    results = []  # Liste pour stocker les résultats
+    
+    for var in continuous_vars:
+        # Regrouper les données par la variable cible
+        groups = [group[var].dropna() for name, group in df.groupby(target_var)]
+        
+        # Effectuer le test ANOVA
+        F_stat, p_value = f_oneway(*groups)
+        if p_value < 0.05:
+            results.append({"Variable": var, "F-Statistic": F_stat, "p-value": p_value})
+    
+    # Convertir les résultats en DataFrame
+    results_df = pd.DataFrame(results)
+    
+    # Trier par p-value croissante
+    results_df = results_df.sort_values(by="p-value", ascending=True).reset_index(drop=True)
+    
+    return results_df
+
+
+### test de Kruskall Wallis
+def perform_kruskal_wallis(data, cont_vars, target):
+    # Initialiser un dictionnaire pour stocker les résultats
+    kruskal_results = {}
+    
+    # Itérer sur les variables continues
+    for var in cont_vars:
+        # Extraire les valeurs pour les groupes de la variable cible
+        groups = [data[data[target] == value][var].dropna() for value in data[target].unique()]
+        
+        # Effectuer le test de Kruskal-Wallis
+        kruskal_stat, p_value = stats.kruskal(*groups)
+
+        if p_value < 0.05:
+            # Stocker les résultats dans le dictionnaire
+            kruskal_results[var] = {
+            'Kruskal-Stat': kruskal_stat,
+            'p-value': p_value
+            }    
+    
+    # Convertir les résultats en DataFrame pour faciliter la visualisation
+    kruskal_results_df = pd.DataFrame(kruskal_results).T
+    print("le nombre de colonnes retenues est : ", kruskal_results_df.shape[0])
+    print()
+    print("les variables supprimées sont : ", [var for var in cont_vars if var not in kruskal_results_df.index])
+    
+    
+    return kruskal_results_df
