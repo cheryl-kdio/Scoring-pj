@@ -434,7 +434,13 @@ def group_by_rsq(df, cat_var,cible):
     grouped_classes = []
     cumulative_weight = 0
     group = []
-    risk_rates = df.groupby(cat_var)[cible].mean()
+    risk_rates = (df.groupby(cat_var)[cible].mean()).sort_values(ascending=False)
+    freq_df = df.groupby(cat_var).size() / len(df)  # Fréquence des modalités
+    freq_df = pd.DataFrame({'Frequence': freq_df, 'Taux de risque': risk_rates})
+    freq_df = freq_df.sort_values(by='Taux de risque', ascending=False)
+        
+    # Affichage du DataFrame avec modalités, fréquences et taux de risque
+    print(freq_df)
     for i, (interval, risk) in enumerate(risk_rates.items()):
         freq = df[df[cat_var] == interval].shape[0] / df.shape[0]
         group.append(interval)
@@ -458,117 +464,95 @@ def group_by_rsq(df, cat_var,cible):
     return grouped_classes
 
 
-#### CHECK IF USED
+import pandas as pd
 
-def filter_by_cv(df, variables, threshold=0.1):
+def discretize_by_groups(df, cat_var, grouped_modalities):
     """
-    Filtre les variables qui ont un Coefficient de Variation (CV) supérieur à un seuil donné.
+    Discrétise la variable catégorielle selon les modalités regroupées en fonction de leur taux de risque moyen.
     """
-    cv_values = {}
-    high_cv_vars = []
+    # Créer un dictionnaire de mapping des groupes
+    group_mapping = {}
+    for idx, group in enumerate(grouped_modalities):
+        for modality in group:
+            group_mapping[modality] = f'Group_{idx + 1}'
     
-    for var in variables:
-        if var in df.columns:
-            mean = df[var].mean()
-            std = df[var].std()
+    # Appliquer la discrétisation en fonction du dictionnaire
+    df['Discretized'] = df[cat_var].map(group_mapping)
+    
+    return df['Discretized']
+
+
+#Pour discrétiser une variable continue Weighted of Evidence
+def iv_woe(data,target,bins=5,show_woe=False,epsilon=1e-16):
+    newDF,woeDF = pd.DataFrame(),pd.DataFrame()
+    cols=data.columns
+
+    #Run WOE and IV on all independent variables
+    for ivars in cols[~cols.isin([target])]:
+        if (data[ivars].dtype.kind in 'bifc') and (len(np.unique(data[ivars]))>10):
+            binned_x = pd.qcut(data[ivars],bins,duplicates="drop")
+            d0=pd.DataFrame({'x':binned_x,'y':data[target]})
+        else:
+            d0=pd.DataFrame({'x':data[ivars],'y':data[target]})
+
+        #calculate the nb of events in each group (bin)
+
+        d=d0.groupby("x",as_index=False).agg({"y":["count", "sum"]})
+        d.columns = ["Cutoff","N","Events"]
+
+        #calculate % of events in each group
+        d['% of Events']=np.maximum(d['Events'],epsilon)/(d['Events'].sum()+epsilon)
+
+        #calculate the non events in each group
+        d['Non-Events']=d['N'] - d['Events']
+        #calculate % of non-events in each group
+        d['% of Non-Events']=np.maximum(d['Non-Events'],epsilon)/(d['Non-Events'].sum()+epsilon)
+
+        #calculate WOE by taking natural log of division of % of non-events and % of events
+        d['WoE'] = np.log(d['% of Events']/d['% of Non-Events'])
+        d['IV'] = d['WoE']*(d['% of Events'] - d['% of Non-Events'])
+        d.insert(loc=0,column="Variable",value=ivars)
+        print("--------------------------------------------\n")
+        print("Information value of variable " + ivars + " is " + str(round(d["IV"].sum(),6)))
+        temp=pd.DataFrame({"Variable":[ivars],"IV":[d["IV"].sum()]},columns=["Variable","IV"])
+        newDF=pd.concat([newDF,temp],axis=0)
+        woeDF=pd.concat([woeDF,d],axis=0)
+
+        #show woe table
+        if show_woe==True:
+            print(d)
+    return newDF,woeDF
+
+def discretize_with_iv_woe(X_train, cible,date, numerical_columns, bins=5, epsilon=1e-16):
+    discretized_data = X_train[[date,cible]].copy()
+    discretized_columns = []
+    non_discretized_columns = []
+
+    for col in numerical_columns:
+        # Appliquer la fonction iv_woe pour obtenir les points de coupure
+        result = iv_woe(X_train[[col] + [cible]], cible, bins=bins, show_woe=False, epsilon=epsilon)
+
+        if result[1]["IV"].sum() != 0:  # Si l'IV n'est pas nul, discrétiser
+            # Extraire les cutoffs (intervalles)
+            cutoffs = result[1]["Cutoff"].unique()
             
-            # Calcul du Coefficient de Variation (CV)
-            if mean != 0:  # Éviter les divisions par zéro
-                cv = std / mean
-                cv_values[var] = cv
-                # Vérification si le CV est supérieur au seuil
-                if cv > threshold:
-                    high_cv_vars.append(var)
+            # Si les cutoffs sont des intervalles, extraire les bornes
+            if isinstance(cutoffs[0], pd.Interval):
+                bins_edges = sorted(set([interval.left for interval in cutoffs] + [interval.right for interval in cutoffs]))
             else:
-                cv_values[var] = float('inf')  # CV infini si la moyenne est 0
-    print("----- Resultats -----")
-    print(f"Nombre de variables avec un CV élevé: {len(high_cv_vars)}")
-    print("\n Variables :")
-    if high_cv_vars:
-        for var in high_cv_vars:
-            print(f"  - {var} (CV: {cv_values[var]:.4f})")
-    else:
-        print("  None found.")
-    
-    return high_cv_vars, cv_values,
+                # Sinon, traiter les cutoffs comme des valeurs discrètes (par exemple pour des variables catégoriques)
+                bins_edges = sorted(cutoffs)
+            
+            # Discrétiser la colonne en utilisant les bornes et ajouter la colonne discrétisée avec suffixe "_cut"
+            discretized_data[col + "_dis"] = pd.cut(X_train[col].copy(), bins=bins_edges, include_lowest=True, duplicates='drop')
+            discretized_columns.append(col + "_dis")
 
+            print(f"Discrétisation de la colonne {col} avec les bornes: {bins_edges}")
+        else:
+            discretized_data[col ] = X_train[col].copy()
+            non_discretized_columns.append(col)
 
-def gini_index(data):
-    """
-    Calcule l'indice de Gini pour une série de données.
-    """
-    sorted_data = np.sort(data)
-    n = len(data)
-    cumulative = np.cumsum(sorted_data) / np.sum(sorted_data)
-    gini = 1 - (2 / n) * np.sum(cumulative) + 1 / n
-    return gini
-
-def summarize_continuous_vars(df, variables):
-    """
-    Résume les informations de distribution pour un ensemble de variables continues.
-
-    """
-    summary = []
-
-    for var in variables:
-        if var in df.columns:
-            data = df[var].dropna()  # Exclure les valeurs manquantes
-            if len(data) > 1:  # Vérifier qu'il y a assez de données pour calculer les stats
-                mean = data.mean()
-                std = data.std()
-                cv = std / mean if mean != 0 else np.nan
-                iqr = data.quantile(0.75) - data.quantile(0.25)
-                skewness = skew(data)
-                kurt = kurtosis(data, fisher=True)
-                gini = gini_index(data)
-
-                summary.append({
-                    "Variable": var,
-                    "Mean": mean,
-                    "StdDev": std,
-                    "CV": cv,
-                    "IQR": iqr,
-                    "Skewness": skewness,
-                    "Kurtosis": kurt,
-                    "Gini": gini
-                })
-
-    return pd.DataFrame(summary)
-
-def sum_iqr(df, variables):
-    """
-    Résume les informations de distribution pour un ensemble de variables continues.
-
-    """
-    summary = []
-
-    for var in variables:
-        if var in df.columns:
-            data = df[var].dropna()  # Exclure les valeurs manquantes
-            if len(data) > 1:  # Vérifier qu'il y a assez de données pour calculer les stats
-                iqr = data.quantile(0.75) - data.quantile(0.25)
-                if iqr == 0 :
-                    summary.append({
-                        "Variable": var,
-                        "IQR": iqr
-                    })
-
-    return pd.DataFrame(summary)
-
-
-def summarize_distribution_table(df):
-    """
-    Résume les informations de distribution d'un tableau basé sur des seuils pour CV, skewness, kurtosis et Gini.
-    """
-    summary = {
-        #"High Dispersion (CV > 1)": df[df['CV'].abs() > 1]['Variable'].tolist(),
-        "Low Dispersion (CV < 0.1)": df[df['CV'].abs() < 0.1]['Variable'].tolist(),
-        "Highly Skewed (Skewness > 2 or < -2)": df[(df['Skewness'] > 2) | (df['Skewness'] > -2)]['Variable'].tolist(),
-        "Highly Kurtotic (Kurtosis > 3)": df[df['Kurtosis'] > 3]['Variable'].tolist(),
-        "Highly Concentrated (Gini > 0.9)": df[df['Gini'] > 0.9]['Variable'].tolist(),
-    }
-    
-    return summary
+    return discretized_data, discretized_columns, non_discretized_columns
 
 
 ############# Discrétisation avec la méthode ChiMerge
@@ -683,59 +667,23 @@ def discretize_with_intervals(data, intervals_by_variable, date, cible):
 import pandas as pd
 from scipy.stats import f_oneway
 
-def perform_anova(data, continuous_vars, target_var):
-    df = data.copy()
-    results = []  # Liste pour stocker les résultats
-    for var in continuous_vars:
-        # Regrouper les données par la variable cible
-        groups = [group[var].dropna() for name, group in df.groupby(target_var)]
-        
-        # Effectuer le test ANOVA
-        F_stat, p_value = f_oneway(*groups)
-        results.append({"Variable": var, "F-Statistic": F_stat, "p-value": p_value})
-        # if p_value < 0.05:
-        #     results.append({"Variable": var, "F-Statistic": F_stat, "p-value": p_value})
-    
-    # Convertir les résultats en DataFrame
-    results_df = pd.DataFrame(results)
-    
-    # Trier par p-value croissante
-    results_df = results_df.sort_values(by="p-value", ascending=True).reset_index(drop=True)
-    
-    return results_df
-
+def perform_anova(df, continuous_var, target_name):
+    anova_result = []
+    for col in continuous_var :
+        df_clean = df[[col,target_name]].dropna(axis=0)
+        group=[group for _, group in df_clean.groupby(target_name)[col]]
+        statistic, pvalue = stats.kruskal(*group)
+        anova_result.append([col,statistic,pvalue])
+    result_df = pd.DataFrame(anova_result,columns=["Columns","Stat","Pvalue"])
+    return result_df
 
 ### test de Kruskall Wallis
-def perform_kruskal_wallis(data, cont_vars, target):
-    # Initialiser un dictionnaire pour stocker les résultats
-    kruskal_sign_results = {}
-    kruskal_gen_results = {}
-    
-    # Itérer sur les variables continues
-    for var in cont_vars:
-        # Extraire les valeurs pour les groupes de la variable cible
-        groups = [data[data[target] == value][var].dropna() for value in data[target].unique()]
-        
-        # Effectuer le test de Kruskal-Wallis
-        kruskal_stat, p_value = stats.kruskal(*groups)
-        kruskal_gen_results[var] = {
-            'Kruskal-Stat': kruskal_stat,
-            'p-value': p_value
-            }    
-
-        if p_value < 0.05:
-            # Stocker les résultats dans le dictionnaire
-            kruskal_sign_results[var] = {
-            'Kruskal-Stat': kruskal_stat,
-            'p-value': p_value
-            }    
-    
-    # Convertir les résultats en DataFrame pour faciliter la visualisation
-    kruskal_gen_results_df = pd.DataFrame(kruskal_gen_results).T
-    kruskal_sign_results_df = pd.DataFrame(kruskal_sign_results).T
-    print("le nombre de colonnes retenues est : ", kruskal_sign_results_df.shape[0])
-    print()
-    print("les variables supprimées sont : ", [var for var in cont_vars if var not in kruskal_sign_results.index])
-    
-    
-    return kruskal_gen_results_df, kruskal_sign_results_df
+def perform_kruskal_wallis(df, continuous_var,target_name):
+    kruskal_result = []
+    for col in continuous_var :
+        df_clean = df[[col,target_name]].dropna(axis=0)
+        group=[group for _, group in df_clean.groupby(target_name)[col]]
+        statistic, pvalue = stats.kruskal(*group)
+        kruskal_result.append([col,statistic,pvalue])
+    result_df = pd.DataFrame(kruskal_result,columns=["Columns","Stat","Pvalue"])
+    return result_df
