@@ -707,7 +707,8 @@ def perform_anova(df, continuous_vars, target_var):
 ### test de Kruskall Wallis
 def perform_kruskal_wallis(data, cont_vars, target):
     # Initialiser un dictionnaire pour stocker les résultats
-    kruskal_results = {}
+    kruskal_sign_results = {}
+    kruskal_gen_results = {}
     
     # Itérer sur les variables continues
     for var in cont_vars:
@@ -716,19 +717,24 @@ def perform_kruskal_wallis(data, cont_vars, target):
         
         # Effectuer le test de Kruskal-Wallis
         kruskal_stat, p_value = stats.kruskal(*groups)
+        kruskal_gen_results[var] = {
+            'Kruskal-Stat': kruskal_stat,
+            'p-value': p_value
+            }    
 
         if p_value < 0.05:
             # Stocker les résultats dans le dictionnaire
-            kruskal_results[var] = {
+            kruskal_sign_results[var] = {
             'Kruskal-Stat': kruskal_stat,
             'p-value': p_value
             }    
     
     # Convertir les résultats en DataFrame pour faciliter la visualisation
-    kruskal_results_df = pd.DataFrame(kruskal_results).T
+    kruskal_gen_results_df = pd.DataFrame(kruskal_gen_results).T
+    kruskal_sign_results_df = pd.DataFrame(kruskal_sign_results).T
     print("le nombre de colonnes retenues est : ", kruskal_results_df.shape[0])
     print()
     print("les variables supprimées sont : ", [var for var in cont_vars if var not in kruskal_results_df.index])
     
     
-    return kruskal_results_df
+    return kruskal_gen_results_df, kruskal_sign_results_df
