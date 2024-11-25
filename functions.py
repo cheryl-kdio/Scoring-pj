@@ -393,6 +393,17 @@ def stats_liaisons_var_quali(df,categorical_columns):
                 
     return (p_value_df, cramer_v_df)
 
+def test_freq_by_group(data, qualitative_vars, threshold=0.05):
+
+    unique_mod_result = []
+
+    for var in qualitative_vars:
+        value_counts = data[var].value_counts(normalize=True)  # Normalisation des fréquences
+        if value_counts.iloc[0] <=threshold:
+            unique_mod_result.append(var)
+    if len(unique_mod_result)==0:
+        print("Aucune variable n'a de modalités avec moins de 5% d'effectifs.")
+    return unique_mod_result
 
 def group_by_rsq(df, cat_var,cible):
     """
