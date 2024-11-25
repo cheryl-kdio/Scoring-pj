@@ -306,7 +306,7 @@ def plot_boxplots(data, vars_list, cols=2):
     axes = axes.flatten()  # Aplatir les axes pour itération facile
 
     for i, var in enumerate(vars_list):
-        sns.boxplot(data=data, y=var, ax=axes[i])  # Création du boxplot
+        sns.boxplot(data=data, y=var, ax=axes[i],showfliers=False)  # Création du boxplot
         axes[i].set_title(f"Boxplot de {var}")
         axes[i].set_xlabel("")  # Pas besoin d'étiquette pour x
         axes[i].set_ylabel("Valeurs")
@@ -333,7 +333,7 @@ def plot_boxplots_by_target(data, vars_list, target, cols=2):
     axes = axes.flatten()  # Aplatir les axes pour itération facile
 
     for i, var in enumerate(vars_list):
-        sns.boxplot(data=data, x=target, y=var, ax=axes[i], palette='Set3')
+        sns.boxplot(data=data, x=target, y=var, ax=axes[i], palette='Set3',showfliers=False)
         axes[i].set_title(f"{var}")
         axes[i].set_xlabel("Valeur cible")
         axes[i].set_ylabel(var)
