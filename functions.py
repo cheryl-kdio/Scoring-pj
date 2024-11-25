@@ -320,30 +320,51 @@ def plot_boxplots(data, vars_list, cols=2):
     plt.show()
 
 
-def plot_boxplots_by_target(data, vars_list, target, cols=2):
-    """
-    Génère des boxplots pour chaque variable continue en fonction des valeurs cibles fournies.
-    """
+import math
+import matplotlib.pyplot as plt
+import seaborn as sns
 
+def plot_kde_by_target(data, vars_list, target, cols=2):
+    """
+    Génère des boxplots (et KDE plots optionnellement) pour chaque variable continue en fonction des valeurs cibles fournies.
+    
+    Parameters:
+    - data (DataFrame): Les données contenant les variables.
+    - vars_list (list): Liste des variables continues à tracer.
+    - target (str): Nom de la variable cible.
+    - cols (int): Nombre de colonnes de la grille de subplots.
+    - kde (bool): Si True, génère des KDE plots en plus des boxplots.
+    """
     data = data.copy()
     num_vars = len(vars_list)
-    rows = math.ceil(num_vars / cols) 
+    rows = math.ceil(num_vars / cols)
 
     fig, axes = plt.subplots(rows, cols, figsize=(15, rows * 5))
-    axes = axes.flatten()  # Aplatir les axes pour itération facile
+    axes = axes.flatten()  # Aplatir les axes pour faciliter l'itération
 
     for i, var in enumerate(vars_list):
-        sns.boxplot(data=data, x=target, y=var, ax=axes[i], palette='Set3',showfliers=False)
-        axes[i].set_title(f"{var}")
-        axes[i].set_xlabel("Valeur cible")
+        sns.kdeplot(
+            data=data, 
+            x=var, 
+            hue=target, 
+            ax=axes[i], 
+            fill=True, 
+            palette="Set2", 
+            common_norm=False, 
+            alpha=0.5
+        )
+        axes[i].set_title(f"KDE Plot de {var} par {target}")
+        axes[i].set_xlabel(target)
         axes[i].set_ylabel(var)
-        
+
+    # Supprimer les axes inutilisés
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
-
-    fig.suptitle("Boxplots des variables continues par valeur cible", fontsize=16, y=1.02)
+    fig.suptitle(f"KDE des variables continues selon la variable cible", fontsize=16, y=1.02)
     plt.tight_layout()
     plt.show()
+
+
 
 
 def cramer_V(cat_var1,cat_var2):
