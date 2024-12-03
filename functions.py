@@ -86,7 +86,7 @@ def plot_cat_vars_distributions(data, vars_list, cols=2):
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
     
-    fig.suptitle("Distribution des modalités", fontsize=16, y=1.02) 
+    fig.suptitle("Distribution des modalités", fontsize=16, x=0.0, y=1.02, ha='left') 
     
     plt.tight_layout()
     plt.show()
@@ -110,7 +110,7 @@ def tx_rsq_par_var(df, categ_vars, date, target, cols=2):
     num_vars = len(categ_vars)
     rows = math.ceil(num_vars / cols) 
 
-    fig, axes = plt.subplots(rows, cols, figsize=(15, rows * 5), sharex=True, sharey=True)
+    fig, axes = plt.subplots(rows, cols, figsize=(15, rows * 5), sharex=False, sharey=False)
     axes = axes.flatten()  # Aplatir les axes pour itération facile
 
     for i, categ_var in enumerate(categ_vars):
@@ -131,7 +131,7 @@ def tx_rsq_par_var(df, categ_vars, date, target, cols=2):
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
-    fig.suptitle("Taux de défaut par variable catégorielle", fontsize=16, y=1.02)
+    fig.suptitle("Taux de défaut par variable catégorielle",fontsize=16, x=0.0, y=1.02, ha='left')
     plt.tight_layout()
     plt.show()
 
@@ -180,7 +180,7 @@ def combined_barplot_lineplot(df, cat_vars, cible, cols=2):
         fig.delaxes(axes[j])
 
     # Titre général
-    fig.suptitle("Barplots et Lineplots combinés pour les variables catégorielles", fontsize=16, y=1.02)
+    fig.suptitle("Barplots et Lineplots combinés pour les variables catégorielles",fontsize=16, x=0.0, y=1.02, ha='left')
     plt.tight_layout()
     plt.show()
 
@@ -204,7 +204,7 @@ def compare_distributions_grid(X_train, X_test, var_list, cols=2):
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
     
-    fig.suptitle("Comparaison des distributions dans l'echantillon Train et Test", fontsize=16, y=1.02) 
+    fig.suptitle("Comparaison des distributions dans l'echantillon Train et Test",fontsize=16, x=0.0, y=1.02, ha='left') 
 
     plt.tight_layout()
     plt.show()
@@ -289,7 +289,7 @@ def plot_modalities_over_time(X_train, date_col, categorical_vars, exclude_vars=
     # Supprimer les axes inutilisés
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
-    fig.suptitle("Evolution des modalités dans le temps", fontsize=16, y=1.02) 
+    fig.suptitle("Evolution des modalités dans le temps",fontsize=16, x=0.0, y=1.02, ha='left') 
 
     plt.tight_layout()
     plt.show()
@@ -314,7 +314,7 @@ def plot_boxplots(data, vars_list, cols=2):
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
-    fig.suptitle("Distribution des variables continues", fontsize=16, y=1.02)  # Positionner le titre légèrement au-dessus
+    fig.suptitle("Distribution des variables continues",fontsize=16, x=0.0, y=1.02, ha='left')  # Positionner le titre légèrement au-dessus
 
     plt.tight_layout()
     plt.show()
@@ -360,7 +360,7 @@ def plot_kde_by_target(data, vars_list, target, cols=2):
     # Supprimer les axes inutilisés
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
-    fig.suptitle(f"KDE des variables continues selon la variable cible", fontsize=16, y=1.02)
+    fig.suptitle(f"KDE des variables continues selon la variable cible",fontsize=16, x=0.0, y=1.02, ha='left')
     plt.tight_layout()
     plt.show()
 
@@ -415,16 +415,32 @@ def stats_liaisons_var_quali(df,categorical_columns):
     return (p_value_df, cramer_v_df)
 
 def test_freq_by_group(data, qualitative_vars, threshold=0.05):
-
+    """
+    Identifie les variables qualitatives qui ont au moins une modalité avec une fréquence relative
+    inférieure ou égale au seuil spécifié.
+    """
+    # Liste pour stocker les variables correspondant au critère
     unique_mod_result = []
 
     for var in qualitative_vars:
+        # Vérifie si la variable existe dans le DataFrame
+        if var not in data.columns:
+            print(f"Attention : la variable '{var}' n'existe pas dans le DataFrame.")
+            continue
+        
+        # Calcul des fréquences relatives des modalités
         value_counts = data[var].value_counts(normalize=True)  # Normalisation des fréquences
-        if value_counts.iloc[0] <=threshold:
+
+        # Vérifie si au moins une modalité a une fréquence <= threshold
+        if (value_counts <= threshold).any():
             unique_mod_result.append(var)
-    if len(unique_mod_result)==0:
+
+    # Message si aucune variable ne satisfait le critère
+    if len(unique_mod_result) == 0:
         print("Aucune variable n'a de modalités avec moins de 5% d'effectifs.")
+
     return unique_mod_result
+
 
 def group_by_rsq(df, cat_var,cible):
     """
@@ -465,21 +481,29 @@ def group_by_rsq(df, cat_var,cible):
 
 
 import pandas as pd
+def discretize_by_groups(df, cat_var, grouped_modalities,date,cible,id_client):
+    """
+    Discrétise une variable catégorielle selon les modalités regroupées.
+    Le nom des groupes sera une concaténation des modalités regroupées.
+    """
+    temp_df = pd.DataFrame()
 
-def discretize_by_groups(df, cat_var, grouped_modalities):
-    """
-    Discrétise la variable catégorielle selon les modalités regroupées en fonction de leur taux de risque moyen.
-    """
+    temp_df[cible] = df[cible].values
+    temp_df[date] = df[date].values
+    temp_df[id_client] =df[id_client].values
+    temp_df[cat_var] = df[cat_var].values
+
     # Créer un dictionnaire de mapping des groupes
     group_mapping = {}
-    for idx, group in enumerate(grouped_modalities):
+    for group in grouped_modalities:
+        group_name =f"[{','.join(group)}]"  # Concaténer les modalités pour former le nom du groupe
         for modality in group:
-            group_mapping[modality] = f'Group_{idx + 1}'
+            group_mapping[modality] = group_name
     
     # Appliquer la discrétisation en fonction du dictionnaire
-    df['Discretized'] = df[cat_var].map(group_mapping)
+    temp_df[cat_var + "_dis"] = df[cat_var].map(group_mapping)
     
-    return df['Discretized']
+    return temp_df
 
 
 #Pour discrétiser une variable continue Weighted of Evidence
@@ -511,6 +535,7 @@ def iv_woe(data,target,bins=5,show_woe=False,epsilon=1e-16):
         #calculate WOE by taking natural log of division of % of non-events and % of events
         d['WoE'] = np.log(d['% of Events']/d['% of Non-Events'])
         d['IV'] = d['WoE']*(d['% of Events'] - d['% of Non-Events'])
+        
         d.insert(loc=0,column="Variable",value=ivars)
         print("--------------------------------------------\n")
         print("Information value of variable " + ivars + " is " + str(round(d["IV"].sum(),6)))
@@ -523,8 +548,8 @@ def iv_woe(data,target,bins=5,show_woe=False,epsilon=1e-16):
             print(d)
     return newDF,woeDF
 
-def discretize_with_iv_woe(X_train, cible,date, numerical_columns, bins=5, epsilon=1e-16):
-    discretized_data = X_train[[date,cible]].copy()
+def discretize_with_iv_woe(X_train, cible,date, numerical_columns, id_client,bins=5, epsilon=1e-16):
+    discretized_data = X_train[[date,cible,id_client]].copy()
     discretized_columns = []
     non_discretized_columns = []
 
@@ -535,7 +560,7 @@ def discretize_with_iv_woe(X_train, cible,date, numerical_columns, bins=5, epsil
         if result[1]["IV"].sum() != 0:  # Si l'IV n'est pas nul, discrétiser
             # Extraire les cutoffs (intervalles)
             cutoffs = result[1]["Cutoff"].unique()
-            
+            cutoffs = cutoffs
             # Si les cutoffs sont des intervalles, extraire les bornes
             if isinstance(cutoffs[0], pd.Interval):
                 bins_edges = sorted(set([interval.left for interval in cutoffs] + [interval.right for interval in cutoffs]))
