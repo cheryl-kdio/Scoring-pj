@@ -712,3 +712,65 @@ def perform_kruskal_wallis(df, continuous_var,target_name):
         kruskal_result.append([col,statistic,pvalue])
     result_df = pd.DataFrame(kruskal_result,columns=["Columns","Stat","Pvalue"])
     return result_df
+
+# Application de modèles
+import statsmodels.api as sm 
+from sklearn.metrics import auc
+from sklearn.metrics  import roc_curve
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+def reg_logistique(df_train,var_cible,categorical_variables,numerical_variables):
+    risk_drivers = categorical_variables + numerical_variables
+
+    modalites_reference = []
+    for var in categorical_variables :
+        # La modalité de référence est celle avec le taux de défaut le plus élevé
+        freq_defaut = df_train.groupby([var],as_index=True)[[var_cible]].mean().reset_index().sort_values(by=[var_cible],ascending=True).reset_index(drop=True)
+        modalites_reference.append(var+'_'+str(freq_defaut[var][0]))
+
+    # Transformer la base train
+    #dummies_test = pd.get_dummies(df_test,columns=categorical_variables).drop(modalites_reference,axis=1).copy()
+    dummies_train = pd.get_dummies(df_train,columns=categorical_variables,dtype='int').drop(modalites_reference,axis=1).copy()
+
+    X_train = dummies_train.drop(var_cible,axis=1).copy()
+    Y_train = dummies_train[var_cible].copy()
+
+    #X_test = dummies_test.drop(var_cible,axis=1).copy()
+    #Y_test = dummies_test[var_cible].copy()
+
+    # Rajout de la constante dans le modèle
+    X_train = sm.add_constant(X_train)
+    #X_test = sm.add_constant(X_test)
+
+    # Modèle
+    model = sm.Logit(Y_train,X_train).fit(disp=False)
+    y_train_pred = model.predict(X_train)
+    #y_test_pred = model.predict(X_test)
+
+    # Calculer les AUC
+    fpr_train,tpr_train,thresholds_train = roc_curve(Y_train,y_train_pred)
+    roc_auc_train = auc(fpr_train,tpr_train)
+
+    #fpr_test,tpr_test,thresholds_test = roc_curve(Y_test,y_test_pred)
+    #roc_auc_test = auc(fpr_test,tpr_test)
+
+    # pvaleurs
+    pvaleurs_coeffs = model.pvalues
+    pvaleur_model = model.llr_pvalue
+
+    flag_significativite = 0
+    if (all(pvaleurs_coeffs<=0.05)) & (pvaleur_model<=0.05):
+        flag_significativite = 1
+
+    # VIF
+    vif=pd.DataFrame()
+    vif["variable"]=X_train.columns
+    vif["VIF"]=[variance_inflation_factor(X_train.values,i) for i in range(X_train.shape[1])]
+    vif.drop(0,inplace=True)
+
+    # flag pour vérifier si tous les VIF sont <10
+    flag_VIF = 0
+    if all(vif["VIF"]<10):
+        flag_VIF = 1
+
+    return risk_drivers, pvaleur_model, pvaleurs_coeffs.to_dict(),flag_significativite,vif,flag_VIF,roc_auc_train, fpr_train,tpr_train,model
