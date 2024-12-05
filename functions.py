@@ -479,6 +479,69 @@ def group_by_rsq(df, cat_var,cible):
             grouped_classes.append(group)
     return grouped_classes
 
+def group_by_rsq_relative_freq(df, cat_var, cible, seuil=0.3):
+    """
+    Groupe les modalités d'une variable catégorielle en fonction des écarts relatifs entre fréquences,
+    calculés par rapport à la modalité précédente, et affiche les écarts relatifs.
+
+    Arguments :
+    - df : DataFrame contenant les données.
+    - cat_var : str, nom de la colonne catégorielle.
+    - cible : str, nom de la variable cible (ex. : taux de risque).
+    - seuil : float, seuil d'écart relatif pour regrouper les modalités.
+
+    Retourne :
+    - grouped_classes : liste de groupes de modalités regroupées.
+    """
+    grouped_classes = []
+    group = []
+    risk_rates = (df.groupby(cat_var)[cible].mean()).sort_values(ascending=False)
+    freq_df = df.groupby(cat_var).size() / len(df)  # Fréquence des modalités
+    freq_df = pd.DataFrame({'Frequence': freq_df, 'Taux de risque': risk_rates})
+    freq_df = freq_df.sort_values(by='Taux de risque', ascending=False)
+
+    # Affichage du DataFrame avec modalités, fréquences et taux de risque
+    print("\nTableau des fréquences et taux de risque :")
+    print(freq_df)
+
+    previous_freq = None  # Initialiser la fréquence précédente
+
+    for interval, freq in freq_df['Taux de risque'].items():
+        if previous_freq is None:
+            # Première modalité : Démarrer un nouveau groupe
+            group.append(interval)
+        else:
+            # Calculer l'écart relatif par rapport à la modalité précédente
+            ecart_relatif = abs(freq - previous_freq) / previous_freq
+
+            # Afficher l'écart relatif pour information
+            print(f"\nÉcart relatif entre {interval} ({freq:.2%}) et la modalité précédente ({previous_freq:.2%}): {ecart_relatif:.2%}")
+
+            if ecart_relatif <= seuil:
+                # Ajouter la modalité au groupe si l'écart relatif est inférieur ou égal au seuil
+                group.append(interval)
+            else:
+                # Terminer le groupe actuel et en commencer un nouveau
+                grouped_classes.append(group)
+                group = [interval]
+
+        # Mettre à jour la modalité précédente
+        previous_freq = freq
+
+    # Gestion du dernier groupe (si existant)
+    if group:
+        freq = freq_df['Taux de risque'].iloc[-1]
+        ecart_relatif = abs(freq - previous_freq) / previous_freq
+        if ecart_relatif < 0.03 and grouped_classes:
+            # Ajouter le dernier groupe au groupe précédent pour respecter la contrainte
+            grouped_classes[-1].extend(group)
+        else:
+            # Ajouter le dernier groupe si la contrainte est respectée
+            grouped_classes.append(group)
+
+    return grouped_classes
+
+
 
 import pandas as pd
 def discretize_by_groups(df, cat_var, grouped_modalities,date,cible,id_client):
@@ -496,7 +559,7 @@ def discretize_by_groups(df, cat_var, grouped_modalities,date,cible,id_client):
     # Créer un dictionnaire de mapping des groupes
     group_mapping = {}
     for group in grouped_modalities:
-        group_name =f"[{','.join(group)}]"  # Concaténer les modalités pour former le nom du groupe
+        group_name = f"[{','.join(map(str, group))}]"   # Concaténer les modalités pour former le nom du groupe
         for modality in group:
             group_mapping[modality] = group_name
     
